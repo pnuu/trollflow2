@@ -137,6 +137,8 @@ def _create_listener_from_connection_parameters(connection_parameters):
     """Create listener from connection parameters."""
     topics = connection_parameters['topic']
     nameserver = connection_parameters.get('nameserver', 'localhost')
+    if nameserver.lower() == 'false':
+        nameserver = False
     addresses = connection_parameters.get('addresses')
     listener = ListenerContainer(
         addresses=addresses,
