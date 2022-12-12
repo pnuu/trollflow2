@@ -327,6 +327,27 @@ Options:
   - ``min_valid_data_fraction: 10`` - only generate products if at least 10% of covered
   part of scene contains valid data.
 
+Uploading produced data to S3
+*****************************
+
+The ``s3_uploader`` plugin can upload the produced imagery to a S3 object storage.
+The plugin also updates the filenames so that the messaging plugin will announce
+the files at the correct location. Optionally, the locally saved files are removed
+after the transfer. The plugin requires ``trollmoves`` and ``s3fs`` Python
+packages.
+
+Options are given in the main body of the product list within a ``s3_config`` dictionary.
+The connection options are handled by the
+`fsspec <https://filesystem-spec.readthedocs.io/en/latest/features.html#configuration>`_
+configuration mechanism.
+
+Options:
+  - ``target`` - the name, with scheme, of the target S3 bucket. Note that if ``output_dir``
+    is defined with a tailing directory separator, the same should be done here.
+  - ``delete_files`` - boolean defining whether the locally saved files should be deleted or not.
+    Default: ``False``
+
+
 Product list
 ------------
 
@@ -368,6 +389,10 @@ Example
       - avhrr-3
 
     min_coverage: 25
+    s3_config:
+      target: s3://name-of-the-bucket/
+      delete_files: true
+
     areas:
       baws:
         areaname: baws
@@ -423,6 +448,7 @@ Example
     - fun: !!python/name:trollflow2.plugins.resample
     - fun: !!python/name:trollflow2.plugins.save_datasets
     - fun: !!python/name:trollflow2.plugins.add_overviews
+    - fun: !!python/name:trollflow2.plugins.s3_uploader
     - fun: !!python/object:trollflow2.plugins.FilePublisher {port: 40004, nameservers: [localhost]}
 
 

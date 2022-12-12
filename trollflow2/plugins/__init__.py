@@ -340,11 +340,16 @@ class FilePublisher:
     @staticmethod
     def create_message(fmat, mda):
         """Create a message topic and mda."""
+        from urllib.parse import urlparse
+
         topic_pattern = fmat["publish_topic"]
         file_mda = mda.copy()
         file_mda.update(fmat.get('extra_metadata', {}))
 
-        file_mda['uri'] = os.path.abspath(fmat['filename'])
+        if urlparse(fmat['filename']).scheme != '':
+            file_mda['uri'] = fmat['filename']
+        else:
+            file_mda['uri'] = os.path.abspath(fmat['filename'])
 
         file_mda['uid'] = os.path.basename(fmat['filename'])
         file_mda['product'] = fmat['product']
@@ -892,3 +897,25 @@ def _product_meets_min_valid_data_fraction(
     LOG.debug(f"Found {rel_valid:%}>{min_frac:%}, keeping "
               f"{prod_name:s} for area {area_name:s} in the worklist")
     return True
+
+
+def s3_uploader(job):
+    """Upload data to S3 and update the filenames.
+
+    Optionally also delete the files after the upload.
+    """
+    from trollmoves.movers import S3Mover
+
+    s3_config = job['product_list']['product_list'].get('s3_config', {}).copy()
+    delete_files = s3_config.pop('delete_files', False)
+
+    for fmt, fmt_config in plist_iter(job['product_list']['product_list']):
+        local_fname = fmt_config['filename']
+        s3_target = fmt['s3_config']['target']
+        mover = S3Mover(local_fname, s3_target)
+        if delete_files:
+            mover.move()
+        else:
+            mover.copy()
+        s3_uri = fmt['filename'].replace(fmt['output_dir'], s3_target)
+        fmt_config['filename'] = s3_uri
