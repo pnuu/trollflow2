@@ -323,6 +323,10 @@ class FilePublisher:
         self.pub = None
         self.port = port
         self.nameservers = nameservers
+        LOG.debug("Publisher settings in __init__: nameservers = {}, port = {}",
+                  str(nameservers), str(port))
+        LOG.debug("Publisher settings in __init__: self.nameservers = {}, self.port = {}",
+                  str(self.nameservers), str(self.port))
         self.__setstate__({'port': port, 'nameservers': nameservers})
 
     def __setstate__(self, kwargs):
@@ -330,8 +334,8 @@ class FilePublisher:
         LOG.debug('Starting publisher')
         self.port = kwargs.get('port', 0)
         self.nameservers = kwargs.get('nameservers', "")
-        LOG.debug("Publisher settings: nameservers = {}, port = {}",
-                  self.nameservers, self.port)
+        LOG.debug("Publisher settings in __setstate__: nameservers = {}, port = {}",
+                  str(self.nameservers), str(self.port))
         self._pub_starter = create_publisher_from_dict_config(
             {
                 'port': self.port,
