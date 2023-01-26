@@ -330,6 +330,8 @@ class FilePublisher:
         LOG.debug('Starting publisher')
         self.port = kwargs.get('port', 0)
         self.nameservers = kwargs.get('nameservers', "")
+        LOG.debug("Publisher settings: nameservers = {}, port = {}",
+                  self.nameservers, self.port)
         self._pub_starter = create_publisher_from_dict_config(
             {
                 'port': self.port,
