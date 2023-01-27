@@ -50,9 +50,7 @@ def logging_on(log_queue, config=None):
     # Lift out the existing handlers (we need to keep these for pytest's caplog)
     handlers = root.handlers.copy()
 
-    if config is None:
-        config = DEFAULT_LOG_CONFIG
-    logging.config.dictConfig(config)
+    _set_config(config)
 
     # set up and run listener
     listener = QueueListener(log_queue, *(root.handlers + handlers))
@@ -63,9 +61,16 @@ def logging_on(log_queue, config=None):
         listener.stop()
 
 
-def setup_queued_logging(log_queue):
+def _set_config(config):
+    if config is None:
+        config = DEFAULT_LOG_CONFIG
+    logging.config.dictConfig(config)
+
+
+def setup_queued_logging(log_queue, config=None):
     """Set up queued logging."""
     root_logger = getLogger()
+    _set_config(config)
     queue_handler = QueueHandler(log_queue)
     queue_handler.setLevel(DEBUG)
     root_logger.addHandler(queue_handler)
