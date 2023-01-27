@@ -51,6 +51,7 @@ except ImportError:
 
 from trollflow2.dict_tools import gen_dict_extract, plist_iter
 from trollflow2.logging import logging_on
+from trollflow2.logging import setup_queued_logging
 from trollflow2.plugins import AbortProcessing
 
 
@@ -358,6 +359,7 @@ def get_dask_client(config):
 
 def queue_logged_process(msg, prod_list, produced_files, log_queue):
     """Run `process` with a queued log."""
+    setup_queued_logging(log_queue)
     with suppress(ValueError):
         signal.signal(signal.SIGUSR1, print_traces)
         LOG.debug("Use SIGUSR1 on pid {} to check the current tracebacks of this subprocess.".format(os.getpid()))
