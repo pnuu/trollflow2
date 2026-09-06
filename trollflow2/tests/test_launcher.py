@@ -681,8 +681,58 @@ class TestProcess(TestCase):
         with pytest.raises(TimeoutError, match="Timeout for .* expired "
                                                "after 0.1 seconds"):
             process(self.msg, "prod_list", self.queue)
-        # wait a little to ensure alarm is not raised later
-        time.sleep(0.11)
+        assert _pending_alarm() == 0.0
+
+    def test_timeout_is_cancelled_when_worker_returns_in_time(self):
+        """Test that a worker finishing in time does not leave its alarm armed.
+
+        A pending alarm would otherwise fire during one of the later workers,
+        interrupting it with a timeout configured for a worker that already
+        completed successfully.
+        """
+        def wait(job):
+            del job
+            time.sleep(0.3)
+
+        timed_plugin = mock.MagicMock()
+        slow_plugin = mock.MagicMock()
+        slow_plugin.side_effect = wait
+
+        self.expand.return_value = {"workers": [{"fun": timed_plugin, "timeout": 0.1},
+                                                {"fun": slow_plugin}]}
+        process(self.msg, "prod_list", self.queue)
+
+        timed_plugin.assert_called_once()
+        slow_plugin.assert_called_once()
+        assert _pending_alarm() == 0.0
+
+    def test_timeout_is_cancelled_when_worker_aborts(self):
+        """Test that a worker raising AbortProcessing does not leave its alarm armed."""
+        # Import from the launcher: `trollflow2.tests.utils` drops
+        # `trollflow2.plugins` from `sys.modules`, so re-importing it here would
+        # give a *different* AbortProcessing class than the one launcher catches.
+        from trollflow2.launcher import AbortProcessing
+
+        self.fake_plugin.side_effect = AbortProcessing("no thanks")
+
+        self.expand.return_value = {"workers": [{"fun": self.fake_plugin, "timeout": 0.1}]}
+        process(self.msg, "prod_list", self.queue)
+
+        assert _pending_alarm() == 0.0
+
+    def test_timeout_is_not_passed_on_to_the_worker(self):
+        """Test that `timeout` is consumed by the runner and not given to the worker."""
+        self.expand.return_value = {"workers": [{"fun": self.fake_plugin, "timeout": 10}]}
+        process(self.msg, "prod_list", self.queue)
+
+        self.fake_plugin.assert_called_once_with(
+            {"job1": {}, "processing_priority": 1, "produced_files": self.queue})
+
+
+def _pending_alarm():
+    """Get the seconds remaining on the real-time timer, 0.0 if it is not armed."""
+    import signal
+    return signal.getitimer(signal.ITIMER_REAL)[0]
 
 
 def test_workers_initialized():

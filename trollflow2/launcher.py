@@ -36,7 +36,7 @@ import re
 import signal
 import traceback
 from collections import OrderedDict
-from contextlib import suppress
+from contextlib import contextmanager, suppress
 from datetime import datetime
 from queue import Empty
 from urllib.parse import urlsplit
@@ -429,6 +429,37 @@ def process_files(input_filenames, input_mda, prod_list, produced_files):
         gc.collect()
 
 
+@contextmanager
+def worker_timeout(wrk):
+    """Interrupt the wrapped call with a `TimeoutError` after ``wrk['timeout']`` seconds.
+
+    Does nothing if the worker *wrk* has no ``timeout`` configured.  The timer
+    is always cancelled again on the way out, also when the worker raises, so
+    that a pending alarm can never fire during a later worker or a later
+    processing priority.
+    """
+    timeout = wrk.get("timeout")
+    if timeout is None:
+        yield
+        return
+
+    def _timeout_handler(signum, frame):
+        raise TimeoutError(
+            f"Timeout for {wrk['fun']!s} expired "
+            f"after {timeout:.1f} seconds, "
+            "giving up")
+
+    previous_handler = signal.signal(signal.SIGALRM, _timeout_handler)
+    # using setitimer because it accepts floats, unlike signal.alarm
+    signal.setitimer(signal.ITIMER_REAL, timeout)
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)  # cancel the alarm
+        if previous_handler is not None:
+            signal.signal(signal.SIGALRM, previous_handler)
+
+
 def process_jobs(workers, jobs, produced_files):
     """Process the jobs."""
     for prio in sorted(jobs.keys()):
@@ -438,21 +469,10 @@ def process_jobs(workers, jobs, produced_files):
         try:
             for wrk in workers:
                 cwrk = wrk.copy()
-                if "timeout" in cwrk:
-                    def _timeout_handler(signum, frame, wrk=wrk):
-                        raise TimeoutError(
-                            f"Timeout for {wrk['fun']!s} expired "
-                            f"after {wrk['timeout']:.1f} seconds, "
-                            "giving up")
-
-                    signal.signal(signal.SIGALRM, _timeout_handler)
-                    # using setitimer because it accepts floats,
-                    # unlike signal.alarm
-                    signal.setitimer(signal.ITIMER_REAL,
-                                     cwrk.pop("timeout"))
-                cwrk.pop('fun')(job, **cwrk)
-                if "timeout" in cwrk:
-                    signal.alarm(0)  # cancel the alarm
+                cwrk.pop("timeout", None)
+                fun = cwrk.pop('fun')
+                with worker_timeout(wrk):
+                    fun(job, **cwrk)
         except AbortProcessing as err:
             logger.warning(str(err))
 
